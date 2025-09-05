@@ -9,8 +9,8 @@ app.listen(port, () => {
 })
 // Connection string
 const uri = process.env.MONGODB_URI;
-let client;
-let db;
+let client = null;
+let db = null;
 
 console.log('Environment check:');
 console.log('PORT:', port);
@@ -25,38 +25,49 @@ app.use(express.json());
 // Connect to MongoDB
 async function connectToMongoDB() {
   if (!client) {
-    client = new MongoClient(uri);
-    await client.connect();
-    console.log("Connected to MongoDB!");
+    try {
+      console.log('Creating new MongoDB connection...');
+      client = new MongoClient(uri, {
+        // Add these options for better connection stability
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+      
+      await client.connect();
+      console.log("Connected to MongoDB!");
+      
+      db = client.db("PrimaLingua");
+      
+      // Handle connection events
+      client.on('error', (error) => {
+        console.error('MongoDB connection error:', error);
+      });
+      
+    } catch (error) {
+      console.error('Failed to connect to MongoDB:', error);
+      throw error;
+    }
   }
-  const database = client.db("PrimaLingua");
-  return { client, db: database };
+  
+  return { client, db };
 }
 
 // Setup API routes
-
 app.get('/', (req, res) => {
   res.json({ message: "Prima Lingua is running!" });
 });
 
-// app.get('/api/words', async (req, res) => {
-//   try {
-//     const { db } = await connectToMongoDB();
-//     const collection = db.collection("Words");
-//     const words = await collection.find({}).toArray();
-//     res.json(words);
-//   } catch (error) {
-//     console.error("Error fetching words:", error);
-//     res.status(500).json({ error: "Failed to fetch words" });
-//   }
-// });
-
 app.get('/api/words', async (req, res) => {
   try {
     console.log('Starting to fetch words...');
-    const { db } = await connectToMongoDB();
-    console.log('Database connection obtained');
     
+    // Don't create new connection, use existing one
+    if (!db) {
+      await connectToMongoDB();
+    }
+    
+    console.log('Using existing database connection');
     const collection = db.collection("Words");
     console.log('Collection reference created for "Words"');
     
@@ -70,10 +81,13 @@ app.get('/api/words', async (req, res) => {
   }
 });
 
+
 // Get a single word by ID
 app.get('/api/words/:id', async (req, res) => {
+  if (!db) {
+    await connectToMongoDB();
+  }
   try {
-    const { db } = await connectToMongoDB();
     const collection = db.collection("Words");
     const word = await collection.findOne({ identifier: req.params.id });
     
