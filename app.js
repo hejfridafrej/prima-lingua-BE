@@ -1,4 +1,3 @@
-// const uri = "mongodb+srv://annafridamariajonsson:0909mongo@words.mongodb.net/?retryWrites=true&w=majority";
 require('dotenv').config();
 const express = require('express');
 const { MongoClient } = require('mongodb');
@@ -12,6 +11,11 @@ app.listen(port, () => {
 const uri = process.env.MONGODB_URI;
 let client;
 let db;
+
+console.log('Environment check:');
+console.log('PORT:', port);
+console.log('MONGODB_URI exists:', !!uri);
+console.log('MONGODB_URI first 20 chars:', uri ? uri.substring(0, 20) : 'undefined');
 
 // Middleware
 app.use(express.json());
