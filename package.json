@@ -4,8 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "prebuild": "npm config get registry && cat .npmrc",
-    "build": "npm install",
+    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node app.js"
   },
   "keywords": [],

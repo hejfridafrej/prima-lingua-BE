@@ -9,7 +9,7 @@ app.listen(port, () => {
   console.log(`Server runs on port ${port}`);
 })
 // Connection string
-const uri = "mongodb+srv://annafridamariajonsson:0909mongo@words.ckgby.mongodb.net/?retryWrites=true&w=majority&appName=Words";
+const uri = process.env.MONGODB_URI;
 let client;
 let db;
 
@@ -24,12 +24,17 @@ async function connectToMongoDB() {
     client = new MongoClient(uri);
     await client.connect();
     console.log("Connected to MongoDB!");
-    db = client.db("PrimaLingua");
   }
-  return { client, db };
+  const database = client.db("PrimaLingua");
+  return { client, db: database };
 }
 
 // Setup API routes
+
+app.get('/', (req, res) => {
+  res.json({ message: "Prima Lingua is running!" });
+});
+
 app.get('/api/words', async (req, res) => {
   try {
     const { db } = await connectToMongoDB();
