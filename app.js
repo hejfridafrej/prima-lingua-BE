@@ -39,11 +39,30 @@ app.get('/', (req, res) => {
   res.json({ message: "Prima Lingua is running!" });
 });
 
+// app.get('/api/words', async (req, res) => {
+//   try {
+//     const { db } = await connectToMongoDB();
+//     const collection = db.collection("Words");
+//     const words = await collection.find({}).toArray();
+//     res.json(words);
+//   } catch (error) {
+//     console.error("Error fetching words:", error);
+//     res.status(500).json({ error: "Failed to fetch words" });
+//   }
+// });
+
 app.get('/api/words', async (req, res) => {
   try {
+    console.log('Starting to fetch words...');
     const { db } = await connectToMongoDB();
+    console.log('Database connection obtained');
+    
     const collection = db.collection("Words");
+    console.log('Collection reference created for "Words"');
+    
     const words = await collection.find({}).toArray();
+    console.log('Query executed, found', words.length, 'words');
+    
     res.json(words);
   } catch (error) {
     console.error("Error fetching words:", error);
