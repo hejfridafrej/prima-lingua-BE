@@ -3,10 +3,8 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 
 const app = express();
-const port = process.env.PORT || 3000; // or any port you prefer
-app.listen(port, () => {
-  console.log(`Server runs on port ${port}`);
-})
+const port = process.env.PORT || 3000;
+
 // Connection string
 const uri = process.env.MONGODB_URI;
 let client = null;
@@ -26,10 +24,13 @@ async function connectToMongoDB() {
     try {
       console.log('Creating new MongoDB connection...');
       client = new MongoClient(uri, {
-        // Add these options for better connection stability
+        // Add SSL options for better Render compatibility
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
+        tls: true,
+        tlsAllowInvalidCertificates: false,
+        tlsAllowInvalidHostnames: false,
       });
       
       await client.connect();
@@ -50,21 +51,6 @@ async function connectToMongoDB() {
   
   return { client, db };
 }
-
-async function startServer() {
-  try {
-    await connectToMongoDB();
-    
-    app.listen(port, () => {
-      console.log(`Server runs on port ${port}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-}
-
-startServer();
 
 // Setup API routes
 app.get('/', (req, res) => {
@@ -114,7 +100,6 @@ app.get('/api/words', async (req, res) => {
   }
 });
 
-
 // Get a single word by ID
 app.get('/api/words/:id', async (req, res) => {
   if (!db) {
@@ -134,6 +119,20 @@ app.get('/api/words/:id', async (req, res) => {
   }
 });
 
+// Start server with MongoDB connection
+async function startServer() {
+  try {
+    await connectToMongoDB();
+    
+    app.listen(port, () => {
+      console.log(`Server runs on port ${port}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
 // Handle application shutdown
 process.on('SIGINT', async () => {
   if (client) {
@@ -142,3 +141,6 @@ process.on('SIGINT', async () => {
   }
   process.exit(0);
 });
+
+// Start the server
+startServer();
