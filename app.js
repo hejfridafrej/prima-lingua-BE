@@ -20,8 +20,6 @@ console.log('MONGODB_URI first 20 chars:', uri ? uri.substring(0, 20) : 'undefin
 // Middleware
 app.use(express.json());
 
-
-
 // Connect to MongoDB
 async function connectToMongoDB() {
   if (!client) {
@@ -53,9 +51,44 @@ async function connectToMongoDB() {
   return { client, db };
 }
 
+async function startServer() {
+  try {
+    await connectToMongoDB();
+    
+    app.listen(port, () => {
+      console.log(`Server runs on port ${port}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
 // Setup API routes
 app.get('/', (req, res) => {
   res.json({ message: "Prima Lingua is running!" });
+});
+
+app.get('/api/debug', async (req, res) => {
+  try {
+    if (!db) {
+      await connectToMongoDB();
+    }
+    
+    // List all collections to see exact names
+    const collections = await db.listCollections().toArray();
+    console.log('Available collections:', collections.map(c => c.name));
+    
+    res.json({
+      database: db.databaseName,
+      collections: collections.map(c => c.name)
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/words', async (req, res) => {
@@ -98,16 +131,6 @@ app.get('/api/words/:id', async (req, res) => {
   } catch (error) {
     console.error("Error fetching word:", error);
     res.status(500).json({ error: "Failed to fetch word" });
-  }
-});
-
-// Start the server
-app.listen(port, async () => {
-  try {
-    await connectToMongoDB();
-    console.log(`Server running on port ${port}`);
-  } catch (error) {
-    console.error("Failed to start server:", error);
   }
 });
 
