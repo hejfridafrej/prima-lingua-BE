@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { MongoClient } = require('mongodb');
+const cors = require('cors');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -9,6 +10,11 @@ const port = process.env.PORT || 3000;
 const uri = process.env.MONGODB_URI;
 let client = null;
 let db = null;
+
+app.use(cors({
+  origin: 'http://localhost:5173', // Your frontend URL
+  credentials: true
+}));
 
 console.log('Environment check:');
 console.log('PORT:', port);
@@ -34,7 +40,6 @@ async function connectToMongoDB() {
       });
       
       await client.connect();
-      console.log("Connected to MongoDB!");
       
       db = client.db("PrimaLingua");
       
@@ -116,6 +121,29 @@ app.get('/api/words/:id', async (req, res) => {
   } catch (error) {
     console.error("Error fetching word:", error);
     res.status(500).json({ error: "Failed to fetch word" });
+  }
+});
+
+app.get('/api/translations', async (req, res) => {
+  try {
+    console.log('Starting to fetch translations...');
+    
+    // Don't create new connection, use existing one
+    if (!db) {
+      await connectToMongoDB();
+    }
+    
+    console.log('Using existing database connection');
+    const collection = db.collection("Translations");
+    console.log('Collection reference created for "Translations"');
+    
+    const translations = await collection.find({}).toArray();
+    console.log('Query executed, found', translations.length, 'translations');
+    
+    res.json(translations);
+  } catch (error) {
+    console.error("Error fetching translations:", error);
+    res.status(500).json({ error: "Failed to fetch translations" });
   }
 });
 
