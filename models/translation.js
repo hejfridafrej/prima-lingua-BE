@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const translationSchema = new mongoose.Schema({
-    wordId: {
+    word_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Word' // This creates a reference to the Word model
     },
