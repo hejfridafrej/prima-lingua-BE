@@ -130,7 +130,6 @@ app.get('/api/translations/:language', async (req, res) => {
     await connectToMongoDB();
   }
   try {
-     console.log('Looking for language:', req.params.language);
     const collection = db.collection("Translations");
     const translations = await collection.find({language: req.params.language}).toArray();
     
@@ -165,15 +164,14 @@ app.get('/api/translations', async (req, res) => {
   }
 });
 
-// Get a all translations by language
+// Get a single language by name
 app.get('/api/languages/:languageName', async (req, res) => {
   if (!db) {
     await connectToMongoDB();
   }
   try {
-     console.log('Looking for language:', req.params.language);
     const collection = db.collection("Languages");
-    const language = await collection.find({name: req.params.languageName}).toArray();
+    const language = await collection.findOne({name: req.params.languageName});
     
     if (!language) {
       return res.status(404).json({ error: "Language not found" });
