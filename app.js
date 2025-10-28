@@ -12,7 +12,7 @@ let client = null;
 let db = null;
 
 app.use(cors({
-  origin: 'http://localhost:5173', // Your frontend URL
+  origin: ['http://localhost:5173', 'https://prima-lingua.onrender.com'],
   credentials: true
 }));
 
