@@ -1,7 +1,15 @@
 require('dotenv').config();
 const express = require('express');
-const { MongoClient, ObjectId } = require('mongodb');
+const mongoose = require('mongoose');
 const cors = require('cors');
+// Models
+const Word = require('./models/word');
+const Translation = require('./models/translation');
+const Language = require('./models/language');
+const Category = require('./models/category');
+const Class = require('./models/class');
+
+const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -11,6 +19,8 @@ const uri = process.env.MONGODB_URI;
 let client = null;
 let db = null;
 
+// Middleware
+app.use(express.json());
 app.use(cors({
   origin: ['http://localhost:5173', 'https://prima-lingua.onrender.com'],
   credentials: true
@@ -19,78 +29,53 @@ app.use(cors({
 console.log('Environment check:');
 console.log('PORT:', port);
 console.log('MONGODB_URI exists:', !!uri);
-console.log('MONGODB_URI first 20 chars:', uri ? uri.substring(0, 20) : 'undefined');
 
-// Middleware
-app.use(express.json());
 
+let isConnected = false;
 // Connect to MongoDB
-async function connectToMongoDB() {
-  if (!client) {
-    try {
-      console.log('Creating new MongoDB connection...');
-      client = new MongoClient(uri, {
-        // Add SSL options for better Render compatibility
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-        tls: true,
-        tlsAllowInvalidCertificates: false,
-        tlsAllowInvalidHostnames: false,
-      });
-
-      await client.connect();
-
-      db = client.db("PrimaLingua");
-
-      // Handle connection events
-      client.on('error', (error) => {
-        console.error('MongoDB connection error:', error);
-      });
-
-    } catch (error) {
-      console.error('Failed to connect to MongoDB:', error);
-      throw error;
-    }
+const connectToMongoDB = async () => {
+  if (isConnected) {
+    console.log('Already connected to MongoDB');
+    return;
   }
 
-  return { client, db };
-}
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {});
+    isConnected = true;
+    console.log('Connected to MongoDB via Mongoose');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  }
+};
+
+connectToMongoDB();
 
 // Setup API routes
 app.get('/', (req, res) => {
   res.json({ message: "Prima Lingua is running!" });
 });
 
-app.get('/api/debug', async (req, res) => {
-  try {
-    if (!db) {
-      await connectToMongoDB();
-    }
+// app.get('/api/debug', async (req, res) => {
+//   try {
+//     // List all collections to see exact names
+//     const collections = await db.listCollections().toArray();
+//     console.log('Available collections:', collections.map(c => c.name));
 
-    // List all collections to see exact names
-    const collections = await db.listCollections().toArray();
-    console.log('Available collections:', collections.map(c => c.name));
-
-    res.json({
-      database: db.databaseName,
-      collections: collections.map(c => c.name)
-    });
-  } catch (error) {
-    console.error('Debug error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+//     res.json({
+//       database: db.databaseName,
+//       collections: collections.map(c => c.name)
+//     });
+//   } catch (error) {
+//     console.error('Debug error:', error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 // Get a single word by ID
 app.get('/api/words/:id', async (req, res) => {
-  if (!db) {
-    await connectToMongoDB();
-  }
   try {
-    const collection = db.collection("Words");
-    const word = await collection.findOne({ _id: new ObjectId(req.params.id) });
-
+    const word = await Word.findById(req.params.id).populate('category').populate('class');
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
@@ -103,19 +88,9 @@ app.get('/api/words/:id', async (req, res) => {
 
 app.get('/api/words', async (req, res) => {
   try {
-    console.log('Starting to fetch words...');
-
-    // Don't create new connection, use existing one
-    if (!db) {
-      await connectToMongoDB();
-    }
-
-    const collection = db.collection("Words");
-    console.log('Collection reference created for "Words"');
-
-    const words = await collection.find({}).toArray();
-    console.log('Query executed, found', words.length, 'words');
-
+    const words = await Word.find({})
+      .populate('category')
+      .populate('class');
     res.json(words);
   } catch (error) {
     console.error("Error fetching words:", error);
@@ -123,15 +98,11 @@ app.get('/api/words', async (req, res) => {
   }
 });
 
-// Get a all translations by language
-app.get('/api/translations/:language', async (req, res) => {
-  if (!db) {
-    await connectToMongoDB();
-  }
-  try {
-    const collection = db.collection("Translations");
-    const translations = await collection.find({ language: req.params.language }).toArray();
 
+// Get a all translations by language
+app.get('/api/translations/:languageId', async (req, res) => {
+  try {
+    const translations = await Translation.find({ language: req.params.languageId }).populate('language');
     if (translations.length === 0) {
       return res.status(404).json({ error: "Translations not found" });
     }
@@ -144,18 +115,7 @@ app.get('/api/translations/:language', async (req, res) => {
 
 app.get('/api/translations', async (req, res) => {
   try {
-    console.log('Starting to fetch translations...');
-    if (!db) {
-      await connectToMongoDB();
-    }
-
-
-    const collection = db.collection("Translations");
-    console.log('Collection reference created for "Translations"');
-
-    const translations = await collection.find({}).toArray();
-    console.log('Query executed, found', translations.length, 'translations');
-
+    const translations = await Translation.find({}).populate('language').populate('word_id');
     res.json(translations);
   } catch (error) {
     console.error("Error fetching translations:", error);
@@ -163,14 +123,9 @@ app.get('/api/translations', async (req, res) => {
   }
 });
 
-// Get a single language by name
-app.get('/api/languages/:languageName', async (req, res) => {
-  if (!db) {
-    await connectToMongoDB();
-  }
+app.get('/api/languages/:id', async (req, res) => {
   try {
-    const collection = db.collection("Languages");
-    const language = await collection.findOne({ name: req.params.languageName });
+    const language = await Language.findById(req.params.id);
 
     if (!language) {
       return res.status(404).json({ error: "Language not found" });
@@ -184,33 +139,17 @@ app.get('/api/languages/:languageName', async (req, res) => {
 
 app.get('/api/languages', async (req, res) => {
   try {
-    console.log('Starting to fetch languages...');
-    if (!db) {
-      await connectToMongoDB();
-    }
-
-    const collection = db.collection("Languages");
-    console.log('Collection reference created for "Languages"');
-
-    const languages = await collection.find({}).toArray();
-    console.log('Query executed, found', languages.length, 'languages');
-
+    const languages = await Language.find({});
     res.json(languages);
-
   } catch (error) {
     console.error("Error fetching languages:", error);
     res.status(500).json({ error: "Failed to fetch languages" });
   }
 });
 
-app.get('/api/categories/:categoryName', async (req, res) => {
-  if (!db) {
-    await connectToMongoDB();
-  }
+app.get('/api/categories/:id', async (req, res) => {
   try {
-    const collection = db.collection('Categories');
-    const category = await collection.findOne({ name: req.params.categoryName });
-
+    const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ error: "Category not found" });
     }
@@ -223,16 +162,7 @@ app.get('/api/categories/:categoryName', async (req, res) => {
 
 app.get('/api/categories', async (req, res) => {
   try {
-    console.log('Starting to fetch categories...');
-    if (!db) {
-      await connectToMongoDB();
-    }
-
-    const collection = db.collection("Categories")
-    console.log('Collection reference created for "Categories"');
-
-    const categories = await collection.find({}).toArray();
-    console.log('Query executed, found', categories.length, 'categories');
+    const categories = await Category.find({});
     res.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -240,14 +170,9 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-app.get('/api/classes/:className', async (req, res) => {
-  if (!db) {
-    await connectToMongoDB();
-  }
+app.get('/api/classes/:id', async (req, res) => {
   try {
-    const collection = db.collection("Classes");
-    const singleClass = await collection.findOne({ name: req.params.className });
-
+    const singleClass = await Class.findById(req.params.id);
     if (!singleClass) {
       return res.status(404).json({ error: "Class not found" });
     }
@@ -260,37 +185,17 @@ app.get('/api/classes/:className', async (req, res) => {
 
 app.get('/api/classes', async (req, res) => {
   try {
-    console.log('Starting to fetch classes...');
-    if (!db) {
-      await connectToMongoDB();
-    }
-
-    const collection = db.collection("Classes");
-    console.log('Collection reference created for "Classes"');
-
-    const classes = await collection.find({}).toArray();
-    console.log('Query executed, found', classes.length, 'classes');
+    const classes = await Class.find({});
     res.json(classes);
   } catch (error) {
     console.error('Error fetching classes:', error);
     res.status(500), json({ error: 'Failed to fetch classes' })
   }
 })
-
-// Start server with MongoDB connection
-async function startServer() {
-  try {
-    await connectToMongoDB();
-
-    app.listen(port, () => {
-      console.log(`Server runs on port ${port}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-}
-
+// Start the server
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 // Handle application shutdown
 process.on('SIGINT', async () => {
   if (client) {
@@ -299,6 +204,3 @@ process.on('SIGINT', async () => {
   }
   process.exit(0);
 });
-
-// Start the server
-startServer();

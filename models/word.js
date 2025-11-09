@@ -18,5 +18,5 @@ const wordSchema = new mongoose.Schema({
   timestamps: true
 });
 
-const Word = mongoose.model('Word', wordSchema);
+const Word = mongoose.model('Word', wordSchema, "Words");
 module.exports = Word;

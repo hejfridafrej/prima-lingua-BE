@@ -3,11 +3,12 @@ const mongoose = require('mongoose');
 const translationSchema = new mongoose.Schema({
   word_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Word', // Reference to the Word model
+    ref: 'Word',
     required: true
   },
   language: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Language',
     required: true,
     trim: true
   },
@@ -20,5 +21,5 @@ const translationSchema = new mongoose.Schema({
   timestamps: true
 });
 
-const Translation = mongoose.model('Translation', translationSchema);
+const Translation = mongoose.model('Translation', translationSchema, 'Translations');
 module.exports = Translation;
