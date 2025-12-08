@@ -3,11 +3,13 @@ const mongoose = require('mongoose');
 const wordSchema = new mongoose.Schema({
   class: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Class'
+    ref: 'Class',
+    required: true,
   },
   category: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Category'
+    ref: 'Category',
+    required: true,
   },
   identifier: {
     type: String,
