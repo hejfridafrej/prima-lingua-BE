@@ -72,6 +72,85 @@ app.get('/', (req, res) => {
 //   }
 // });
 
+app.get('/api/vocabulary/', async (req, res) => {
+  try {
+    const { sourceLanguage, targetLanguage, categoryId, classId } = req.query;
+    
+    if (!sourceLanguage || !targetLanguage) {
+      return res.status(400).json({ error: "sourceLanguage and targetLanguage are required" });
+    }
+
+    const [sourceLang, targetLang] = await Promise.all([
+      Language.findOne({ short_name: sourceLanguage }),
+      Language.findOne({ short_name: targetLanguage })
+    ]);
+
+
+    const wordFilter = {};
+    if (categoryId) {
+      wordFilter.category = new ObjectId(categoryId);
+    }
+    if (classId) {
+      wordFilter.class = new ObjectId(classId);
+    }
+
+    const words = await Word.find(wordFilter)
+      .populate('category')
+      .populate('class');
+    const wordIds = words.map(w => w._id);
+
+    const [sourceTranslations, targetTranslations] = await Promise.all([
+      Translation.find({
+        word_id: {$in: wordIds}, // MongoDB operator: "word_id is IN this array"
+      language: sourceLang._id
+      }).populate('language'),
+
+      Translation.find({
+        word_id: {$in: wordIds},
+        language: targetLang._id
+      }).populate('language')
+    ]);
+
+    const sourceMap = new Map(
+      sourceTranslations.map(t => [t.word_id.toString(), t])
+    );
+    const targetMap = new Map(
+      targetTranslations.map(t => [t.word_id.toString(), t])
+    );
+
+    const vocabulary = words.map(word => {
+      const wordIdStr = word._id.toString();
+      const sourceTranslation = sourceMap.get(wordIdStr);
+      const targetTranslation = targetMap.get(wordIdStr);
+
+      if (sourceTranslation && targetTranslation) {
+        return {
+          _id: word._id,
+          identifier: word.identifier,
+          class: word.class,
+          category: word.category,
+          sourceTranslation: {
+            _id: sourceTranslation._id,
+            translation: sourceTranslation.translation,
+            language: sourceTranslation.language
+          },
+          targetTranslation: {
+            _id: targetTranslation._id,
+            translation: targetTranslation.translation,
+            language: targetTranslation.language
+          }
+        };
+      }
+      return null;
+    }).filter(word => word !== null);
+    
+    res.json(vocabulary);
+  } catch (e) {
+    console.error("Error fetching vocabulary:", e);
+    res.status(500).json({ error: "Failed to fetch vocabulary" });
+  }
+});
+
 // Get a single word by ID
 app.get('/api/words/:id', async (req, res) => {
   try {
@@ -100,7 +179,7 @@ app.get('/api/words', async (req, res) => {
 
 
 // Get a all translations by language
-app.get('/api/translations/:languageId', async (req, res) => {
+app.get('/api/translations/:languageId', async (req, res) => { // TODO: change to short_name
   try {
     const translations = await Translation.find({ language: req.params.languageId }).populate('language');
     if (translations.length === 0) {
@@ -123,9 +202,9 @@ app.get('/api/translations', async (req, res) => {
   }
 });
 
-app.get('/api/languages/:id', async (req, res) => {
+app.get('/api/languages/:short_name', async (req, res) => {
   try {
-    const language = await Language.findById(req.params.id);
+    const language = await Language.findOne({short_name: req.params.short_name});
 
     if (!language) {
       return res.status(404).json({ error: "Language not found" });
