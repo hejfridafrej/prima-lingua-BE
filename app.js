@@ -74,8 +74,8 @@ app.get('/', (req, res) => {
 
 app.get('/api/vocabulary/', async (req, res) => {
   try {
-    const { sourceLanguage, targetLanguage, categoryId, classId } = req.query;
-    
+    const { sourceLanguage, targetLanguage, category, classId, page, limit } = req.query; // Use alias for classId?
+
     if (!sourceLanguage || !targetLanguage) {
       return res.status(400).json({ error: "sourceLanguage and targetLanguage are required" });
     }
@@ -84,29 +84,32 @@ app.get('/api/vocabulary/', async (req, res) => {
       Language.findOne({ short_name: sourceLanguage }),
       Language.findOne({ short_name: targetLanguage })
     ]);
-
-
+      
     const wordFilter = {};
-    if (categoryId) {
-      wordFilter.category = new ObjectId(categoryId);
+    if (category) {
+      wordFilter.category = {$in: category.split(',').map(id => new mongoose.Types.ObjectId(id))};
     }
     if (classId) {
-      wordFilter.class = new ObjectId(classId);
+      wordFilter.class = {$in: classId.split(',').map(id => new mongoose.Types.ObjectId(id))};
     }
+    const totalItems = await Word.countDocuments(wordFilter);
+    const pageNume = parseInt(page) || 1;
+    const limitNume = parseInt(limit) || 50;
+    const skipNume = (page - 1) * limit;
 
-    const words = await Word.find(wordFilter)
+    const words = await Word.find(wordFilter).skip(skipNume).limit(limitNume)
       .populate('category')
       .populate('class');
     const wordIds = words.map(w => w._id);
 
     const [sourceTranslations, targetTranslations] = await Promise.all([
       Translation.find({
-        word_id: {$in: wordIds}, // MongoDB operator: "word_id is IN this array"
-      language: sourceLang._id
+        word_id: { $in: wordIds }, // MongoDB operator: "word_id is IN this array"
+        language: sourceLang._id
       }).populate('language'),
 
       Translation.find({
-        word_id: {$in: wordIds},
+        word_id: { $in: wordIds },
         language: targetLang._id
       }).populate('language')
     ]);
@@ -143,8 +146,20 @@ app.get('/api/vocabulary/', async (req, res) => {
       }
       return null;
     }).filter(word => word !== null);
-    
-    res.json(vocabulary);
+
+    const totalPages = Math.ceil(totalItems / limit);
+    const hasMore = page < totalPages;
+
+    res.json({
+      vocabulary: vocabulary,
+      pagination: {
+        currentPage: pageNume,
+        nextPage: hasMore ? pageNume + 1 : null,
+        totalPages,
+        totalItems,
+        hasMore
+      }
+    });
   } catch (e) {
     console.error("Error fetching vocabulary:", e);
     res.status(500).json({ error: "Failed to fetch vocabulary" });
@@ -204,7 +219,7 @@ app.get('/api/translations', async (req, res) => {
 
 app.get('/api/languages/:short_name', async (req, res) => {
   try {
-    const language = await Language.findOne({short_name: req.params.short_name});
+    const language = await Language.findOne({ short_name: req.params.short_name });
 
     if (!language) {
       return res.status(404).json({ error: "Language not found" });
